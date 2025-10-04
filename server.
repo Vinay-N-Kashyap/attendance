@@ -1,0 +1,42 @@
+const express = require('express');
+const path = require('path');
+const mysql = require('mysql2/promise');
+const cors = require('cors');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Enable CORS for cross-origin requests
+app.use(cors());
+
+// Middleware to parse JSON request bodies
+app.use(express.json());
+
+// Serve static files (your frontend) from 'public' folder
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Create a connection pool to your MySQL database
+const pool = mysql.createPool({
+  host: 'localhost',
+  user: 'root',        // change this
+  password: 'vinayrocker2002@',// change this
+  database: 'attendance_db',       // your database
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
+
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+});
+app.get('/api/classes', async (req, res) => {
+  // Fetch classes from MySQL
+});
+
+app.post('/api/classes', async (req, res) => {
+  // Add class
+});
+
+// Similar routes for students, attendance, stats...
+
