@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendance Management</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f4f4f9; }
+    .container { max-width: 1200px; margin: 20px auto; padding: 20px; }
+    h1 { text-align: center; color: #333; }
+    .role-selector { text-align: center; margin-bottom: 20px; }
+    .role-btn { padding: 10px 20px; margin: 0 10px; cursor: pointer; border: none; background: #ddd; border-radius: 5px; }
+    .role-btn.active { background: #4CAF50; color: white; }
+    .dashboard { display: none; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    .dashboard.active { display: block; }
+    .card { background: #fafafa; padding: 15px; border-radius: 5px; margin: 10px 0; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
+    .btn { padding: 8px 12px; margin: 5px; cursor: pointer; border: none; border-radius: 5px; background: #4CAF50; color: white; }
+    .btn.secondary { background: #2196F3; }
+    .btn.danger { background: #f44336; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { padding: 10px; border: 1px solid #ddd; text-align: center; }
+    th { background: #4CAF50; color: white; }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
+    .modal-content { background: white; padding: 20px; border-radius: 8px; width: 400px; max-width: 90%; }
+    .close { float: right; cursor: pointer; font-size: 20px; }
+    .success { background: #dff0d8; color: #3c763d; padding: 10px; margin-top: 10px; border-radius: 5px; display: none; }
+    .attendance-btn { cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Attendance Management System</h1>
+
+    <!-- Role Selector -->
+    <div class="role-selector">
+      <button class="role-btn active" onclick="switchRole(event, 'teacher')">👨‍🏫 Teacher</button>
+      <button class="role-btn" onclick="switchRole(event, 'student')">👨‍🎓 Student</button>
+    </div>
+
+    <!-- Teacher Dashboard -->
+    <div id="teacher-dashboard" class="dashboard active">
+      <h2>Teacher Dashboard</h2>
+      <div class="card">
+        <h3>Quick Actions</h3>
+        <button class="btn secondary" onclick="openModal('addClassModal')">➕ Add Class</button>
+        <button class="btn secondary" onclick="openModal('addStudentModal')">➕ Add Student</button>
+      </div>
+
+      <div class="card">
+        <h3>Classes Overview</h3>
+        <table id="classTable">
+          <thead>
+            <tr>
+              <th>Class Code</th>
+              <th>Class Name</th>
+              <th>Total Students</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h3>Statistics</h3>
+        <p id="stats">Loading...</p>
+      </div>
+    </div>
+
+    <!-- Student Dashboard -->
+    <div id="student-dashboard" class="dashboard">
+      <h2>Student Dashboard</h2>
+      <div class="card">
+        <label for="student-id">Enter Student ID:</label>
+        <input type="text" id="student-id" placeholder="e.g. S101">
+        <button class="btn" onclick="viewStudentAttendance()">View Attendance</button>
+      </div>
+
+      <div class="card">
+        <h3>Your Attendance</h3>
+        <table id="studentAttendanceTable">
+          <thead>
+            <tr>
+              <th>Class</th>
+              <th>Attendance (%)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="student-success" class="success"></div>
+    </div>
+  </div>
+
+  <!-- Add Class Modal -->
+  <div id="addClassModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal('addClassModal')">&times;</span>
+      <h3>Add New Class</h3>
+      <label>Class Code:</label>
+      <input type="text" id="class-code"><br><br>
+      <label>Class Name:</label>
+      <input type="text" id="class-name"><br><br>
+      <button class="btn" onclick="addClass()">Add Class</button>
+    </div>
+  </div>
+
+  <!-- Add Student Modal -->
+  <div id="addStudentModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal('addStudentModal')">&times;</span>
+      <h3>Add New Student</h3>
+      <label>Student ID:</label>
+      <input type="text" id="student-id-input"><br><br>
+      <label>Student Name:</label>
+      <input type="text" id="student-name"><br><br>
+      <label>Assign to Class:</label>
+      <select id="class-select"></select><br><br>
+      <button class="btn" onclick="addStudent()">Add Student</button>
+    </div>
+  </div>
+
+  <!-- Class Students Modal -->
+  <div id="classStudentsModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal('classStudentsModal')">&times;</span>
+      <h3>Class Students</h3>
+      <table id="studentTable">
+        <thead>
+          <tr>
+            <th>Student ID</th>
+            <th>Student Name</th>
+            <th>Mark Attendance</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div id="success-message" class="success"></div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = "http://localhost:5000";
+
+    async function fetchAPI(endpoint, method = "GET", body = null) {
+      try {
+        const res = await fetch(`${API_BASE}${endpoint}`, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: body ? JSON.stringify(body) : null,
+        });
+        return await res.json();
+      } catch (err) {
+        console.error("API Error:", err);
+        return null;
+      }
+    }
+
+    // Role Switcher
+    function switchRole(event, role) {
+      document.querySelectorAll('.role-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.dashboard').forEach(dash => dash.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById(role + '-dashboard').classList.add('active');
+      if (role === 'teacher') loadStats();
+    }
+
+    // Modals
+    function openModal(id) { document.getElementById(id).style.display = "flex"; }
+    function closeModal(id) { document.getElementById(id).style.display = "none"; }
+
+    // Load Classes
+    async function loadClasses() {
+      const classes = await fetchAPI('/classes');
+      if (classes) {
+        const classTable = document.querySelector("#classTable tbody");
+        const classSelect = document.getElementById("class-select");
+        classTable.innerHTML = "";
+        classSelect.innerHTML = '<option value="">Select Class</option>';
+        classes.forEach(cls => {
+          classTable.innerHTML += `
+            <tr>
+              <td>${cls.class_code}</td>
+              <td>${cls.class_name}</td>
+              <td>${cls.total_students}</td>
+              <td><button class="btn secondary" onclick="loadClassStudents('${cls.class_code}')">View</button></td>
+            </tr>`;
+          classSelect.innerHTML += `<option value="${cls.class_code}">${cls.class_name}</option>`;
+        });
+      }
+    }
+
+    // Add Class
+    async function addClass() {
+      const code = document.getElementById("class-code").value;
+      const name = document.getElementById("class-name").value;
+      if (code && name) {
+        await fetchAPI("/add-class", "POST", { class_code: code, class_name: name });
+        closeModal("addClassModal");
+        loadClasses();
+      }
+    }
+
+    // Add Student
+    async function addStudent() {
+      const id = document.getElementById("student-id-input").value;
+      const name = document.getElementById("student-name").value;
+      const classCode = document.getElementById("class-select").value;
+      if (id && name && classCode) {
+        await fetchAPI("/add-student", "POST", { student_id: id, student_name: name, class_code: classCode });
+        closeModal("addStudentModal");
+        loadClasses();
+      }
+    }
+
+    // Load Students in Class
+    async function loadClassStudents(classCode) {
+      const students = await fetchAPI(`/students/${classCode}`);
+      const tbody = document.querySelector("#studentTable tbody");
+      tbody.innerHTML = "";
+      if (students) {
+        for (const student of students) {
+          const attendance = await fetchAPI(`/attendance/${student.student_id}/${classCode}`);
+          const status = attendance?.status || "Not Marked";
+          tbody.innerHTML += `
+            <tr>
+              <td>${student.student_id}</td>
+              <td>${student.student_name}</td>
+              <td>
+                <button class="btn attendance-btn" onclick="markAttendance('${student.student_id}','${classCode}','Present')">✅ Present</button>
+                <button class="btn danger attendance-btn" onclick="markAttendance('${student.student_id}','${classCode}','Absent')">❌ Absent</button>
+                <span>${status}</span>
+              </td>
+            </tr>`;
+        }
+        openModal("classStudentsModal");
+      }
+    }
+
+    // Mark Attendance
+    async function markAttendance(studentId, classCode, status) {
+      await fetchAPI("/mark-attendance", "POST", { student_id: studentId, class_code: classCode, status });
+      document.getElementById("success-message").innerText = `Attendance marked as ${status}`;
+      document.getElementById("success-message").style.display = "block";
+      setTimeout(() => { document.getElementById("success-message").style.display = "none"; }, 3000);
+      loadClassStudents(classCode);
+    }
+
+    // Student Dashboard
+    async function viewStudentAttendance() {
+      const studentId = document.getElementById("student-id").value;
+      const data = await fetchAPI(`/student-attendance/${studentId}`);
+      const tbody = document.querySelector("#studentAttendanceTable tbody");
+      tbody.innerHTML = "";
+      if (data) {
+        data.forEach(record => {
+          tbody.innerHTML += `<tr><td>${record.class_name}</td><td>${record.attendance}%</td></tr>`;
+        });
+      } else {
+        tbody.innerHTML = "<tr><td colspan='2'>No attendance found</td></tr>";
+      }
+    }
+
+    // Stats
+    async function loadStats() {
+      const stats = await fetchAPI("/stats");
+      document.getElementById("stats").innerText = stats ? 
+        `Total Classes: ${stats.total_classes}, Total Students: ${stats.total_students}, Attendance Records: ${stats.total_attendance}` 
+        : "Error loading stats.";
+    }
+
+    // Initialize
+    loadClasses();
+    loadStats();
+  </script>
+</body>
+</html>
